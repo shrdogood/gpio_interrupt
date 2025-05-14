@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <paProtection.h>
 
 /**
  * @brief Edge-triggered interrupts on  GPIO line.

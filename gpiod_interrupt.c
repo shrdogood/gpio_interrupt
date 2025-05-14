@@ -1,5 +1,18 @@
 #include <gpiod_interrupt>
 
+int main(void){
+    while(){
+        if(/*pa开*/){
+            gpiod_interrupt("0", "0", "rising");
+        }
+        else{
+            start_pa_process();
+        }
+    }
+
+    
+}
+
 //开启GPIO边沿触发中断，并循环检测
 int gpiod_interrupt(char *chip_number=NULL, char *line_number=NULL, char *event_mode=NULL){
     struct gpiod_chip *chip = NULL;
@@ -93,7 +106,7 @@ int gpiod_interrupt(char *chip_number=NULL, char *line_number=NULL, char *event_
 // 当GPIO中断触发时，执行PA关闭的相关步骤
 void gpio_interrupt_handler(void)
 {
-    // Step2.1 配置TDD PA控制为关闭
+    // Step2.1 配置TDD输出的PA ctrl置为off
     configure_tdd_pa_ctrl_off();
 
     // Step2.2 配置CLGC和DPD暂停
@@ -120,7 +133,15 @@ void start_pa_process(void)
             configure_clgc_and_dpd_reset();
 
             // Step6: 配置PAP为不可恢复模式
-            configure_pap_unrecoverable();
+            setPapRecover(0);
         }
     }
+}
+
+int check_all_pap_trigger_off(void) {
+    // 逻辑判断所有PAP触发指示是否消失
+    if (/* 检查所有PAP触发指示 */) {
+        return 1;  // 表示所有PAP触发指示消失
+    }
+    return 0;
 }
