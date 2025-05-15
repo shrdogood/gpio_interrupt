@@ -1,16 +1,17 @@
 #include <gpiod_interrupt>
 
-int main(void){
-    while(){
-        if(/*pa开*/){
-            gpiod_interrupt("0", "0", "rising");
-        }
-        else{
-            start_pa_process();
-        }
+bool PA_state = 0;  // 模拟PA的当前状态 0：close 1：open
+bool even_flag = 0;  //所有PAP中断触发指示
+
+int main(int argc, char *argv[]) {
+    if (argc < 4) {
+        perror("Please specify GPIO group、GPIO offset and Trigger Condition\n");
+        return EXIT_FAILURE;
     }
 
-    
+    gpiod_interrupt(argv[1], argv[2], argv[3]);
+
+    return 0;
 }
 
 //开启GPIO边沿触发中断，并循环检测
@@ -79,17 +80,24 @@ int gpiod_interrupt(char *chip_number=NULL, char *line_number=NULL, char *event_
             perror("Event Error!");
             break;
         } else if(ret == 0){
+            //没有触发中断
+            even_flag = 0;
+            if(!PA_state) start_pa_process();
             continue; // Wait for next event
         }
-
-        //触发中断、执行中断处理函数
-        if(gpiod_line_event_read(line, &event) < 0) {
+        
+        //触发中断
+        if(gpiod_line_event_read(line, &event) < 0){
             perror("Reading Event failed");
             break;
         }
         printf("GPIO %d %d :%s\n", atoi(chip_number), gpio_offset, event.event_type == GPIOD_LINE_EVENT_RISING_EDGE ? "Rising Event" : "Falling Event");
         
-        gpio_interrupt_handler();
+        even_flag = 1;
+        if(PA_state && even_flag){
+            even_flag = 0;
+            gpio_interrupt_handler();
+        }
     }
 
 
@@ -114,6 +122,8 @@ void gpio_interrupt_handler(void)
 
     // Step2.3 数字域掐0
     configure_dpd_zero();
+
+    PA_state = 0;
 }
 
 //在关PA状态下检测
@@ -123,7 +133,7 @@ void start_pa_process(void)
     if (check_all_pap_trigger_off()) {
         // Step2: 检测所有通道PAP的关PA触发指示是否全部消失
         if (check_all_pap_trigger_off()) {
-            // Step3: 配置TDD输出的PA控制为正常切换模式
+            // Step3: 配置TDD输出的PA ctrl置为on
             configure_tdd_pa_ctrl_normal();
 
             // Step4: 配置数字域数据恢复
@@ -133,15 +143,46 @@ void start_pa_process(void)
             configure_clgc_and_dpd_reset();
 
             // Step6: 配置PAP为不可恢复模式
-            setPapRecover(0);
+            // setPapRecover(0);
+            configure_pap_unrecoverable();
+
+            PA_state = 1;
         }
     }
 }
 
 int check_all_pap_trigger_off(void) {
-    // 逻辑判断所有PAP触发指示是否消失
-    if (/* 检查所有PAP触发指示 */) {
-        return 1;  // 表示所有PAP触发指示消失
+    // 逻辑判断PAP中断触发指示是否消失
+    if (even_flag == 0) {
+        return 1;  // 表示PAP触发指示消失
     }
     return 0;
+}
+
+void configure_tdd_pa_ctrl_off(void){
+    printf("Configure the PA ctrl for TDD output to off\n");
+}
+
+void configure_clgc_and_dpd_pause(void){
+    printf("Configuring CLGC and DPD Pause\n");
+}
+
+void configure_dpd_zero(void){
+    printf("Numeric field  0\n");
+}
+
+void configure_tdd_pa_ctrl_normal(void){
+    printf("Configure the PA ctrl for TDD output to on\n");
+}
+
+void configure_dpd_recover(void){
+    printf("Configuring Digital Domain Data Recovery\n");
+}
+
+void configure_clgc_and_dpd_reset(void){
+    printf("Configure CLGC to turn on and perform a DPD reset\n");
+}
+
+void configure_pap_unrecoverable(void){
+    printf("Configure PAP for non-recoverable mode\n");
 }

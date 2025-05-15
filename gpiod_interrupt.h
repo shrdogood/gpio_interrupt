@@ -17,7 +17,24 @@
  */
 int gpiod_interrupt(char *chip_number=NULL, char *line_number=NULL, char *event_mode);
 
+/**
+ * @brief interrupt handler.
+ */
 void gpio_interrupt_handler(void);
 
 void start_pa_process(void);
+
+void configure_tdd_pa_ctrl_off(void);
+
+void configure_clgc_and_dpd_pause(void);
+
+void configure_dpd_zero(void);
+
+void configure_tdd_pa_ctrl_normal(void);
+
+void configure_dpd_recover(void);
+
+void configure_clgc_and_dpd_reset(void);
+
+void configure_pap_unrecoverable(void);
 #endif
