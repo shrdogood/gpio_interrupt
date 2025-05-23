@@ -1,18 +1,9 @@
-#include <gpiod_interrupt>
+#include <gpiod_interrupt.h>
 
 bool PA_state = 0;  // 模拟PA的当前状态 0：close 1：open
 bool even_flag = 0;  //所有PAP中断触发指示
+bool pa_process_done = false;
 
-int main(int argc, char *argv[]) {
-    if (argc < 4) {
-        perror("Please specify GPIO group、GPIO offset and Trigger Condition\n");
-        return EXIT_FAILURE;
-    }
-
-    gpiod_interrupt(argv[1], argv[2], argv[3]);
-
-    return 0;
-}
 
 //开启GPIO边沿触发中断，并循环检测
 int gpiod_interrupt(char *chip_number=NULL, char *line_number=NULL, char *event_mode=NULL){
@@ -82,7 +73,7 @@ int gpiod_interrupt(char *chip_number=NULL, char *line_number=NULL, char *event_
         } else if(ret == 0){
             //没有触发中断
             even_flag = 0;
-            if(!PA_state) start_pa_process();
+            if(!PA_state && !pa_process_done) start_pa_process();
             continue; // Wait for next event
         }
         
@@ -113,7 +104,9 @@ int gpiod_interrupt(char *chip_number=NULL, char *line_number=NULL, char *event_
 
 // 当GPIO中断触发时，执行PA关闭的相关步骤
 void gpio_interrupt_handler(void)
-{
+{   
+    // Step1 关TX小信号，再关PA
+
     // Step2.1 配置TDD输出的PA ctrl置为off
     configure_tdd_pa_ctrl_off();
 
@@ -123,7 +116,11 @@ void gpio_interrupt_handler(void)
     // Step2.3 数字域掐0
     configure_dpd_zero();
 
+    // 更新PA状态为已关闭
     PA_state = 0;
+
+    // 标记PA过程已结束
+    pa_process_done = 0;
 }
 
 //在关PA状态下检测
@@ -146,7 +143,11 @@ void start_pa_process(void)
             // setPapRecover(0);
             configure_pap_unrecoverable();
 
+            // 更新PA状态为已启用
             PA_state = 1;
+
+            // 标记PA过程已完成，避免再次执行
+            pa_process_done = true;
         }
     }
 }
