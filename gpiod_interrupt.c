@@ -3,7 +3,7 @@
 bool PA_state = 0;  // 模拟PA的当前状态 0：close 1：open
 bool even_flag = 0;  //所有PAP中断触发指示
 bool pa_process_done = false;
-
+bool pa_process_done = false;bool pa_process_done = false;bool pa_process_done = false;
 
 //开启GPIO边沿触发中断，并循环检测
 int gpiod_interrupt(char *chip_number=NULL, char *line_number=NULL, char *event_mode=NULL){
