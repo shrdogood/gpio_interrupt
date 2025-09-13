@@ -4,108 +4,81 @@
 #include <gpiod.h>
 #include <stdint.h>
 #include <sys/epoll.h>
+#include "dis_dfe8219_board.h"
 #include "gpio_pinmux.h"
 
+/* Maximum number of GPIO interrupt channels supported */
 #define MAX_INT_CNT 8
 
+/* ========== Data Structures ========== */
+
 /**
- * @brief 单个 GPIO 中断通道的配置信息
+ * @brief GPIO interrupt callback function type
+ * @param channel GPIO interrupt channel number
+ * @param gpio_value Current GPIO value (0 or 1)
+ * 
+ * This function type is used for service-specific interrupt handlers.
+ * Services can register their interrupt handlers using this function type. 
+ */
+typedef void (*gpio_interrupt_callback_t)(uint8_t channel, int gpio_value);
+
+/**
+ * @brief GPIO interrupt pin configuration
  */
 typedef struct {
-    uint8_t  group_id;       // GPIO 组编号 (对应 gpiochipX)
-    uint8_t  group_bit;      // GPIO 组内位编号
-    uint8_t  uio_index;      // /dev/uio<uio_index> 设备索引
-    char     consumer[16];   // gpiod consumer 标识符
+    uint8_t  group_id;       /* GPIO group number (corresponds to gpiochipX) */
+    uint8_t  group_bit;      /* GPIO bit number within the group */
+    uint8_t  uio_index;      /* UIO device index for /dev/uio<uio_index> */
+    char     consumer[16];   /* gpiod consumer identifier string */
 } GpioIntPinCfg;
 
 /**
- * @brief GPIO 中断上下文结构体
+ * @brief GPIO interrupt context structure
  */
 typedef struct {
-    uint8_t             int_cnt;                    // 实际中断通道数
-    GpioIntPinCfg       pin_cfg[MAX_INT_CNT];      // 静态配置信息
-    int                 fd[MAX_INT_CNT];           // UIO 文件描述符
-    struct gpiod_line   *line[MAX_INT_CNT];        // gpiod line 句柄
+    uint8_t             int_cnt;                    /* Number of interrupt channels */
+    uint8_t             enable_list[MAX_INT_CNT];   /* Enable list: 1=init, 0=skip */
+    GpioIntPinCfg       pin_cfg[MAX_INT_CNT];      /* Pin configuration array */
+    int                 fd[MAX_INT_CNT];           /* UIO file descriptors */
+    struct gpiod_line   *line[MAX_INT_CNT];        /* gpiod line handles */
 } GpioIntCtx;
 
-/**
- * @brief 旧版兼容结构体 (PAP服务仍在使用)
- */
-typedef struct {
-    struct gpiod_line *line[MAX_INT_CNT];
-    uint8_t IntCount;
-} user_gpio_t;
+extern GpioIntCtx g_gpio_system_ctx;
 
 /**
- * @brief 通用 GPIO 中断初始化接口
- * @param ctx 预先配置好 pin_cfg 和 int_cnt 的上下文指针
- * @return uint8_t DIS_COMMON_ERR_OK 成功，其它错误码表示失败
- * 
- * 使用示例：
- *     GpioIntCtx ctx = { 
- *         .int_cnt = 2,
- *         .pin_cfg = {
- *             {4, 7, 2, "pwr_drop"},      // group4.bit7 -> uio2
- *             {4, 8, 3, "temp_alert"}     // group4.bit8 -> uio3
- *         }
- *     };
- *     ret = gpio_int_init(&ctx);
- */
-uint8_t gpio_int_init(GpioIntCtx *ctx);
-
-/**
- * @brief 根据通道索引初始化单个 GPIO 中断通道
- * @param ctx 已配置的上下文指针
- * @param channel_idx 要初始化的通道索引
- * @return uint8_t DIS_COMMON_ERR_OK 成功，其它错误码表示失败
- */
-uint8_t gpio_int_init_channel(GpioIntCtx *ctx, uint8_t channel_idx);
-
-/**
- * @brief 从数据库配置初始化 GPIO 中断上下文
- * @param ctx        输出的上下文指针
- * @param db_region  数据库区域标识 (如 GPIOINTERRUPT)
- * @param base_path  配置路径前缀 (如 "/GPIOINT" 或 "/papSvc")
- * @return uint8_t   DIS_COMMON_ERR_OK 成功，其它错误码表示失败
- */
-uint8_t gpio_int_ctx_from_db(GpioIntCtx *ctx, uint32_t db_region, 
-                             const char *base_path);
-
-/**
- * @brief 启用指定通道的中断
- * @param ctx 上下文指针
- * @param idx 通道索引
- * @return uint8_t DIS_COMMON_ERR_OK 成功，其它错误码表示失败
- */
-uint8_t gpio_int_enable_irq(GpioIntCtx *ctx, uint8_t idx);
-
-/**
- * @brief 释放 GPIO 中断资源
- * @param ctx 上下文指针
- * @return uint8_t DIS_COMMON_ERR_OK 成功，其它错误码表示失败
- */
-uint8_t gpio_int_deinit(GpioIntCtx *ctx);
-
-/**
- * @brief 打印 GPIO 中断配置信息
- * @param ctx 上下文指针
- */
-void gpio_int_print_info(const GpioIntCtx *ctx);
-
-/**
- * @brief 初始化 GPIO 中断模块的调试日志
- * @param enable 是否启用调试日志 (1=启用, 0=禁用)
+ * @brief Initialize GPIO interrupt module debug logging
+ * @param enable Enable debug logging (1=enable, 0=disable)
  */
 void gpio_int_debug_init(uint8_t enable);
 
-// ============ PAP 服务专用接口 ============
+/**
+ * @brief Initialize complete GPIO interrupt system
+ * @return uint8_t DIS_COMMON_ERR_OK on success, error code on failure
+ * 
+ * This function initializes all enabled GPIO interrupt channels from database
+ * configuration and prepares them for use by different services.
+ */
+uint8_t gpio_int_system_init(void);
 
 /**
- * @brief PAP 服务专用的 GPIO 中断初始化
- * @param fd   uio中断设备的文件描述符指针，指向fd数组
- * @param gpio_data PAP服务使用的GPIO数据结构
- * @return uint8_t DIS_COMMON_ERR_OK 成功，其它错误码表示失败
+ * @brief Register GPIO interrupt callback function for specific channel
+ * @param channel GPIO interrupt channel number
+ * @param callback Callback function pointer (NULL to unregister)
+ * @return uint8_t DIS_COMMON_ERR_OK on success, error code on failure
+ * 
+ * This function allows services to register their specific interrupt handlers
+ * for GPIO channels. When an interrupt occurs on the specified channel,
+ * the registered callback will be called with the current GPIO value (0 or 1).
  */
-uint8_t gpio_interrupt_init_Pap(int *fd, user_gpio_t *gpio_data);
+uint8_t gpio_int_register_callback(uint8_t channel, gpio_interrupt_callback_t callback);
+
+/**
+ * @brief Deinitialize complete GPIO interrupt system
+ * @return uint8_t DIS_COMMON_ERR_OK on success, error code on failure
+ * 
+ * This function stops the monitoring thread, cleans up all resources,
+ * and deinitializes the GPIO interrupt system.
+ */
+uint8_t gpio_int_system_deinit(void);
 
 #endif

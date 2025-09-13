@@ -1,17 +1,23 @@
 # GPIO Interrupt Configuration for DFE8219
 # Format: Each channel has explicit configuration with description
 # pin_cfg format: group_id group_bit uio_index (3 bytes)
-# Note: uio_index doesn't need to be sequential (e.g., can be 4, 2, 7, etc.)
+# enable_list format: comma-separated list of 0/1 values for each channel
+#   1 = enable initialization, 0 = disable initialization
 
-# Number of GPIO interrupt channels
-/GPIOINT/IntCount                  1
+# Number of GPIO interrupt channels (total channels defined)
+/GPIOINT/IntCount                  3
 
-# Channel 0: Power Drop Detection  
-/GPIOINT/ch0/pin_cfg               4, 20, 4
-/GPIOINT/ch0/consumer              "power_drop"
-/GPIOINT/ch0/description           "Power drop detection interrupt"
+# Enable list for channels (1=enable, 0=disable)
+/GPIOINT/enable_list               1, 1, 1
 
-# Channel 1: Power Drop Detection  
-# /GPIOINT/ch1/pin_cfg               0, 2, 5
-# /GPIOINT/ch1/consumer              "test"
-# /GPIOINT/ch1/description           "test"
+/GPIOINT/ch0/pin_cfg               4, 7, 2
+/GPIOINT/ch0/consumer              "PAP Service"
+/GPIOINT/ch0/description           "TRX_IC_A"
+
+/GPIOINT/ch1/pin_cfg               4, 8, 3
+/GPIOINT/ch1/consumer              "PAP Service"  
+/GPIOINT/ch1/description           "TRX_IC_B"
+
+/GPIOINT/ch2/pin_cfg               4, 20, 4
+/GPIOINT/ch2/consumer              "power_drop"
+/GPIOINT/ch2/description           "Power drop detection interrupt"
